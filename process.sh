@@ -1,3 +1,4 @@
+#!/bin/bash
 apt-get install -qq build-essential python-pip cmake mercurial emacs wget unzip
 pip install --upgrade==9.0.1
 pip install scikit-learn numpy scipy matplotlib ipython jupyter pandas sympy nose nltk tensorflow
