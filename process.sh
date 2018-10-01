@@ -4,7 +4,7 @@ apt-get install -qq -y build-essential python-pip cmake mercurial emacs wget unz
 pip install --upgrade pip==9.0.1
 pip install scikit-learn numpy scipy matplotlib ipython jupyter pandas sympy nose nltk tensorflow logging
 
-echo "Getting prebuilt work embeddings"
+echo "Getting prebuilt Glove work embeddings"
 cd
 git clone https://github.com/bozhiliu/nlp.git
 cd nlp
