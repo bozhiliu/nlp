@@ -63,9 +63,9 @@ class Config():
     dim_char = 100
 
     # glove files
-    # filename_glove = os.path.join(cwd, "data/glove.6B/glove.6B.{}d.txt".format(dim_word)
+    filename_glove = os.path.join(cwd, "data/glove.6B/glove.6B.{}d.txt".format(dim_word))
     #change to PubMed
-    filename_glove = os.path.join(cwd, "data/embeddings/PubMed-w2v.txt")
+    #filename_glove = os.path.join(cwd, "data/embeddings/PubMed-w2v.txt")
 
     # trimmed embeddings (created from glove_filename with build_data.py)
     filename_trimmed = os.path.join(cwd, "data/embeddings.{}d.trimmed.npz".format(dim_word))
