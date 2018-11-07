@@ -109,7 +109,7 @@ def pre_main():
 
     for pio in PIO:
       print('Reading files for %s' %pio)
-      for fdir in ['train', 'test/gold', 'test/student']:
+      for fdir in ['train', 'test/gold']:
         batch = fdir.split('/')[-1]
         ann_fnames = glob('../../ebm_nlp_1_00/annotations/aggregated/starting_spans/%s/%s/*.ann' %(pio, fdir))
         for fname in ann_fnames:
@@ -131,7 +131,7 @@ def pre_main():
     for batch, ids in batch_to_ids.items():
       print 'Found %d ids for %s' %(len(ids), batch)
 
-    train_ids = list(batch_to_ids['train'] - batch_to_ids['student'] - batch_to_ids['gold'])
+    train_ids = list(batch_to_ids['train'] - batch_to_ids['gold'])
     print 'Using %d ids for train' %len(train_ids)
 
     dev_idx = int(len(train_ids) * 0.2)
