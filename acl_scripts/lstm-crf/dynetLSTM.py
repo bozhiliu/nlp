@@ -79,9 +79,9 @@ def CRF_score(MLPs, tags):
 
 def CRF_estimate(MLPs):
     best_tags = []
-    alpha = []
-    back = []
-    for i in len(MLPs):
+    alpha = [0] * len(MLPs)
+    back = [0] * len(MLPs)
+    for i in range(len(MLPs)):
         alpha[i] = [0] * VOCAB_TAG_SIZE
         back[i] = [0] * VOCAB_TAG_SIZE
         for j in range(VOCAB_TAG_SIZE):
@@ -91,11 +91,13 @@ def CRF_estimate(MLPs):
                 alpha[i][j] = alpha[i][j] + dy.pick(MLPs[i], j)
                 if i == VOCAB_TAG_SIZE -1 :
                     alpha[i][j] = alpha[i][j] + dy.pick(endCRF, j)
-                for jj in range(VOCAB_TAG_SIZE):
-                    if dy.pick(transCRF[j], jj) > 
+                alpha[i][j] = alpha[i][j] + max(transCRF[i-1])
+                back[i][j] = transCRF[i-1].index(max(transCRF[i-1]))
     
-
-                    
+    best_tags.append(alpha[len(MLPs)-1].index(max(alpha[len(MLPs)-1])))
+    for i in reversed(range(len(MLPs))):
+        if i != 0:
+            best_tags.append(back[i][best_tags[len(MLPs)-i]])
     return best_tags
 
 
@@ -116,3 +118,5 @@ def CRF_partition(MLPs):
     for j in range(VOCAB_TAG_SIZE):
         z = z + dy.exp(alpha[len(MLPs)-1][j])
     return z
+
+
