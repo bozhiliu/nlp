@@ -79,9 +79,40 @@ def CRF_score(MLPs, tags):
 
 def CRF_estimate(MLPs):
     best_tags = []
+    alpha = []
+    back = []
+    for i in len(MLPs):
+        alpha[i] = [0] * VOCAB_TAG_SIZE
+        back[i] = [0] * VOCAB_TAG_SIZE
+        for j in range(VOCAB_TAG_SIZE):
+            if i == 0:
+                alpha[i][j] = dy.pick(beginCRF, j) + dy.pick(MLPs[i], j)
+            if i != 0:
+                alpha[i][j] = alpha[i][j] + dy.pick(MLPs[i], j)
+                if i == VOCAB_TAG_SIZE -1 :
+                    alpha[i][j] = alpha[i][j] + dy.pick(endCRF, j)
+                for jj in range(VOCAB_TAG_SIZE):
+                    if dy.pick(transCRF[j], jj) > 
+    
+
+                    
     return best_tags
 
 
-def CRF_partition():
+def CRF_partition(MLPs):
     z = dy.scalarInput(0)
+    alpha = []
+    for i in len(MLPs):
+        alpha[i] = [0] * VOCAB_TAG_SIZE
+        for j in range(VOCAB_TAG_SIZE):
+            if i == 0:
+                alpha[i][j] = dy.pick(beginCRF, j) + dy.pick(MLPs[i], j)
+            if i != 0:
+                alpha[i][j] = alpha[i][j] + dy.pick(MLPs[i], j)
+                for jj in range(VOCAB_TAG_SIZE):
+                    alpha[i][j] = alpha[i][j] + dy.pick(transCRF[j], jj)
+                if i == VOCAB_TAG_SIZE -1 :
+                    alpha[i][j] = alpha[i][j] + dy.pick(endCRF, j)
+    for j in range(VOCAB_TAG_SIZE):
+        z = z + dy.exp(alpha[len(MLPs)-1][j])
     return z
