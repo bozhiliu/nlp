@@ -4,6 +4,7 @@ import numpy as np
 import random
 import dynet as dy
 import numpy as np
+import math
 from model.data_utils import CoNLLDataset, load_vocab, get_processing_word, get_trimmed_glove_vectors
 from model.config import Config
 
@@ -68,7 +69,7 @@ endCRF = pc.add_parameters((VOCAB_TAG_SIZE, 1), init = softmax(np.random.rand(VO
 
 
 def build_graph(sentence):
-    dy.renew_cg()
+#    dy.renew_cg()
     charFwdInit = charFwdLSTM.initial_state()
     charBwdInit = charBwdLSTM.initial_state()
     wordFwdInit = wordFwdLSTM.initial_state()
@@ -167,21 +168,41 @@ def get_loss(sentence, tags):
 
 num_tagged = cum_loss = 0
 max_iter = 50
-trainer = dy.AdamTrainer(pc, )
-
+trainer = dy.AdamTrainer(pc)
+trainer.set_sparse_updates(False)
 
 def train_one(sentence, tags):    
     global num_tagged
     global cum_loss
+    dy.renew_cg()
     loss_exp = get_loss(sentence,tags)
 #    print loss_exp.scalar_value()
     loss_exp.forward()
     cum_loss = cum_loss + loss_exp.scalar_value()
     num_tagged = num_tagged + len(tags)
     loss_exp.backward()
-    trainer.update()
+    try:
+        trainer.update()
+        return 0
+    except:
+        return 1
 
 
+def train_batch(batch):
+    dy.renew_cg()
+    fail = 0
+    losses = []
+    for (sentence, tags) in batch:
+        losses.append(get_loss(sentence,tags))
+    loss = sum(losses)
+    loss.forward()
+    loss.backward()
+    try:
+        trainer.update()
+        return 0
+    except:
+        return 1
+    
 def print_status():
     global num_tagged
     global cum_loss
@@ -210,19 +231,23 @@ def evaluate(data):
     f1 = 2 * precision * recall / (precision + recall)
     return (precision, recall, f1)
 
-        
+
+batch_size = 20.0
 def main():
     prev_p = prev_recall = prev_f1 = 0
     stable_count = 0
     for iter in range(max_iter):
         random.shuffle(train)
-        for idx in tqdm(range(len(train))):
-            sentence,tags = train[idx]
-            try:
-                train_one(sentence,tags)
-            except:
-                iter = iter - 1
-                break             
+        fails = 0
+#        for idx in tqdm(range(len(train))):
+#            sentence,tags = train[idx]
+#            fails = fails + train_one(sentence,tags)
+        for idx in tqdm(range(int(math.ceil(len(train)/batch_size)))):
+            start = int(idx*batch_size)
+            end = int(idx*batch_size + min(batch_size, len(train)-idx*batch_size))
+            curr_batch = train[start:end]
+            fails = fails + train_batch(curr_batch)
+        print 'Failed batches {:02d} {:02.2f}'.format(fails, float(fails)/math.ceil(len(train)/batch_size))
         (p,r,f1) = evaluate(dev)
         print 'current iteration {:02d} precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(iter, p,r,f1)
         if p == prev_p and r == prev_r and f1 == prev_f1:
