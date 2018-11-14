@@ -17,7 +17,7 @@ from model.config import Config
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--batch', dest='batch_size',type=float, action='store', default=1.0, help='set batch size')
+parser.add_argument('--batch', dest='batch_size',type=float, action='store', default=2.0, help='set batch size')
 options = parser.parse_args()
 
 
@@ -183,7 +183,6 @@ trainer.set_sparse_updates(False)
 def train_one(sentence, tags):    
     global num_tagged
     global cum_loss
-    dy.renew_cg()
 #    print 'Train one ' + str(len(sentence))
     loss_exp = get_loss(sentence,tags)
 #    print loss_exp.scalar_value()
@@ -198,27 +197,26 @@ def train_one(sentence, tags):
 def train_batch(batch):
     global num_tagged
     global cum_loss
-#    dy.renew_cg()
     fail = 0
     losses = []
     for (sentence, tags) in batch:
         losses.append(get_loss(sentence,tags))
         num_tagged = num_tagged + len(tags)
-    loss = sum(losses)
-    cum_loss = cum_loss + loss
-#    loss.forward()
+    loss = dy.esum(losses)
+    cum_loss = cum_loss + loss.value()
     loss.backward()
     try:
         trainer.update()
         return 0
     except:
         return 1
-    
+
+
 def print_status():
     global num_tagged
     global cum_loss
     print trainer.status()
-    print 'training loss {:02.2f}'.format((cum_loss / num_tagged).value()*100)
+    print 'training loss {:02.2f}'.format((cum_loss / num_tagged)*100)
     cum_loss = num_tagged = 0
 
 
@@ -258,15 +256,17 @@ def main():
 #            sentence,tags = train[idx]
 #            fails = fails + train_one(sentence,tags)
 #        for idx in tqdm(range(int(math.ceil(len(train)/batch_size)))):
-        for idx in tqdm(range(500)):
+        for idx in tqdm(range(100)):
+            dy.renew_cg()
             start = int(idx*batch_size)
             end = int(idx*batch_size + min(batch_size, len(train)-idx*batch_size))
             curr_batch = train[start:end]
             fails = fails + train_batch(curr_batch)
         print 'Failed batches {:02d} {:02.2f}'.format(fails, float(fails)/math.ceil(len(train)/batch_size))
         print_status()
-        random.shuffle(dev)        
-        (p,r,f1) = evaluate(dev[0:500])
+        random.shuffle(dev)
+        dy.renew_cg()
+        (p,r,f1) = evaluate(dev[0:100])
         print 'current iteration {:02d} precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(iter+1, p,r,f1)
         if p == prev_p and r == prev_r and f1 == prev_f1:
             stable_count = stable_count + 1
