@@ -2,7 +2,7 @@
 
 import dynet_config
 
-dynet_config.set(mem=20000)
+dynet_config.set(mem=10000)
 
 from tqdm import tqdm
 import numpy as np
