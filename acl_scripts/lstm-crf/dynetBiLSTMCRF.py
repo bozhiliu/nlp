@@ -18,6 +18,7 @@ from model.config import Config
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--batch', dest='batch_size',type=float, action='store', default=2.0, help='set batch size')
+parser.add_argument('--load', dest='load', action='store_true', help='whether if load previous network')
 options = parser.parse_args()
 
 
@@ -66,6 +67,25 @@ biasMLP = pc.add_parameters(VOCAB_TAG_SIZE)
 transCRF = pc.add_lookup_parameters((VOCAB_TAG_SIZE, VOCAB_TAG_SIZE))
 beginCRF = pc.add_lookup_parameters((1, VOCAB_TAG_SIZE))
 endCRF = pc.add_lookup_parameters((1, VOCAB_TAG_SIZE))
+
+num_tagged = cum_loss = 0
+max_iter = 50
+trainer = dy.AdamTrainer(pc)
+trainer.set_sparse_updates(False)
+
+if options.batch_size:
+    batch_size = options.batch_size
+else:
+    batch_size = 20.0
+paramsFile = './data/dynet_params'
+
+
+def save_network():
+    dy.save(paramsFile, [wordFwdLSTM, wordBwdLSTM, charFwdLSTM, charBwdLSTM, LOOKUP_CHAR, LOOKUP_WORD, paramLSTM, biasLSTM, paramMLP, biasMLP, transCRF, beginCRF, endCRF])
+
+
+def load_network():
+    wordFwdLSTM, wordBwdLSTM, charFwdLSTM, charBwdLSTM, LOOKUP_CHAR, LOOKUP_WORD, paramLSTM, biasLSTM, paramMLP, biasMLP, transCRF, beginCRF, endCRF = dy.load(paramsFile, pc)
 
 
 def build_graph(sentence):
@@ -172,11 +192,6 @@ def get_loss(sentence, tags):
     return test_score - gold_score
 
 
-num_tagged = cum_loss = 0
-max_iter = 50
-trainer = dy.AdamTrainer(pc)
-trainer.set_sparse_updates(False)
-
 def train_one(sentence, tags):    
     global num_tagged
     global cum_loss
@@ -189,7 +204,6 @@ def train_one(sentence, tags):
     loss_exp.backward()
     trainer.update()
     
-
 
 def train_batch(batch):
     global num_tagged
@@ -240,25 +254,23 @@ def evaluate(data):
     f1 = 2 * precision * recall / (precision + recall)
     return (precision, recall, f1)
 
-
-if options.batch_size:
-    batch_size = options.batch_size
-else:
-    batch_size = 20.0
-
+    
 def main():
     global cum_loss
     global num_tagged
     prev_loss = prev_p = prev_recall = prev_f1 = 0
     stable_count = 0
+    if options.load:
+        load_network()
     for iter in range(max_iter):
         random.shuffle(train)
+        save_network()
         fails = 0
 #        for idx in tqdm(range(len(train))):
 #            sentence,tags = train[idx]
 #            fails = fails + train_one(sentence,tags)
-#        for idx in tqdm(range(int(math.ceil(len(train)/batch_size)))):
-        for idx in tqdm(range(1000)):
+        for idx in tqdm(range(int(math.ceil(len(train)/batch_size)))):
+#        for idx in tqdm(range(1000)):
             dy.renew_cg()
             start = int(idx*batch_size)
             end = int(idx*batch_size + min(batch_size, len(train)-idx*batch_size))
@@ -273,6 +285,7 @@ def main():
         if prev_loss == cum_loss:
             stable_count = stable_count + 1
         else:
+            print 'previous cumulated loss: {:02f} current cummulated loss: {:02f}'.foramt(prev_loss, cum_loss)
             prev_loss = cum_loss
             prev_p = p
             prev_r = r
