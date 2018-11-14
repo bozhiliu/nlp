@@ -2,7 +2,7 @@
 
 import dynet_config
 
-dynet_config.set(mem=15000)
+dynet_config.set(mem=20000)
 
 from tqdm import tqdm
 import numpy as np
@@ -17,7 +17,7 @@ from model.config import Config
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--batch', dest='batch_size',type=float, action='store', default=10.0, help='set batch size')
+parser.add_argument('--batch', dest='batch_size',type=float, action='store', default=1.0, help='set batch size')
 options = parser.parse_args()
 
 
@@ -206,7 +206,7 @@ def train_batch(batch):
         num_tagged = num_tagged + len(tags)
     loss = sum(losses)
     cum_loss = cum_loss + loss
-    loss.forward()
+#    loss.forward()
     loss.backward()
     try:
         trainer.update()
@@ -258,7 +258,7 @@ def main():
 #            sentence,tags = train[idx]
 #            fails = fails + train_one(sentence,tags)
 #        for idx in tqdm(range(int(math.ceil(len(train)/batch_size)))):
-        for idx in tqdm(range(120)):
+        for idx in tqdm(range(500)):
             start = int(idx*batch_size)
             end = int(idx*batch_size + min(batch_size, len(train)-idx*batch_size))
             curr_batch = train[start:end]
@@ -266,7 +266,7 @@ def main():
         print 'Failed batches {:02d} {:02.2f}'.format(fails, float(fails)/math.ceil(len(train)/batch_size))
         print_status()
         random.shuffle(dev)        
-        (p,r,f1) = evaluate(dev[0:1000])
+        (p,r,f1) = evaluate(dev[0:500])
         print 'current iteration {:02d} precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(iter+1, p,r,f1)
         if p == prev_p and r == prev_r and f1 == prev_f1:
             stable_count = stable_count + 1
