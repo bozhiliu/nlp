@@ -285,7 +285,7 @@ def main():
         if prev_loss == cum_loss:
             stable_count = stable_count + 1
         else:
-            print 'previous cumulated loss: {:02f} current cummulated loss: {:02f}'.foramt(prev_loss, cum_loss)
+            print 'previous cumulated loss: {:02f} current cummulated loss: {:02f}'.format(prev_loss, cum_loss)
             prev_loss = cum_loss
             prev_p = p
             prev_r = r
