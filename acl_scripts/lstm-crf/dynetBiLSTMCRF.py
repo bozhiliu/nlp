@@ -169,9 +169,6 @@ def get_loss(sentence, tags):
     gold_score = CRF_score(MLPs, tags)
     test_score = CRF_score(MLPs, CRF_estimate(MLPs))
 #    z = CRF_partition(MLPs)
-#    print test_score.value()
-#    print gold_score.value()
-#    print z
     return test_score - gold_score
 
 
@@ -217,13 +214,16 @@ def print_status():
     global cum_loss
     print trainer.status()
     print 'training loss {:02.2f}'.format((cum_loss / num_tagged)*100)
-    cum_loss = num_tagged = 0
 
 
 def evaluate(data):
     tp = tn = fp = fn = 0.0
     for idx, (sentence, gold) in enumerate(data):
-        MLPS, tags = sentence_feed(sentence)
+        try:
+            dy.renew_cg()
+            MLPS, tags = sentence_feed(sentence)
+        except:
+            continue
         for i in range(len(tags)):
             if gold[i] == tags[i]:
                 if gold[i] == 0:
@@ -247,7 +247,9 @@ else:
     batch_size = 20.0
 
 def main():
-    prev_p = prev_recall = prev_f1 = 0
+    global cum_loss
+    global num_tagged
+    prev_loss = prev_p = prev_recall = prev_f1 = 0
     stable_count = 0
     for iter in range(max_iter):
         random.shuffle(train)
@@ -256,7 +258,7 @@ def main():
 #            sentence,tags = train[idx]
 #            fails = fails + train_one(sentence,tags)
 #        for idx in tqdm(range(int(math.ceil(len(train)/batch_size)))):
-        for idx in tqdm(range(100)):
+        for idx in tqdm(range(1000)):
             dy.renew_cg()
             start = int(idx*batch_size)
             end = int(idx*batch_size + min(batch_size, len(train)-idx*batch_size))
@@ -266,14 +268,16 @@ def main():
         print_status()
         random.shuffle(dev)
         dy.renew_cg()
-        (p,r,f1) = evaluate(dev[0:100])
+        (p,r,f1) = evaluate(dev[:])
         print 'current iteration {:02d} precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(iter+1, p,r,f1)
-        if p == prev_p and r == prev_r and f1 == prev_f1:
+        if prev_loss == cum_loss:
             stable_count = stable_count + 1
         else:
+            prev_loss = cum_loss
             prev_p = p
             prev_r = r
             prev_f1 = f1
+            cum_loss = num_tagged = 0
         if stable_count == 3:
             print 'Converged! Start evalutation on test sets'
             break
