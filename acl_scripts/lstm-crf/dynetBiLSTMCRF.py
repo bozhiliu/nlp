@@ -2,7 +2,7 @@
 
 import dynet_config
 
-dynet_config.set(mem=20000)
+dynet_config.set(mem=10000)
 
 from tqdm import tqdm
 import numpy as np
@@ -85,6 +85,7 @@ def save_network():
 
 
 def load_network():
+    global wordFwdLSTM, wordBwdLSTM, charFwdLSTM, charBwdLSTM, LOOKUP_CHAR, LOOKUP_WORD, paramLSTM, biasLSTM, paramMLP, biasMLP, transCRF, beginCRF, endCRF
     wordFwdLSTM, wordBwdLSTM, charFwdLSTM, charBwdLSTM, LOOKUP_CHAR, LOOKUP_WORD, paramLSTM, biasLSTM, paramMLP, biasMLP, transCRF, beginCRF, endCRF = dy.load(paramsFile, pc)
 
 
@@ -227,10 +228,11 @@ def print_status():
     global num_tagged
     global cum_loss
     print trainer.status()
-    print 'training loss {:02.2f}'.format((cum_loss / num_tagged)*100)
+    print 'averaged training loss {:02.2f}'.format((cum_loss / num_tagged)*100)
 
 
 def evaluate(data):
+    stats = {t:[0.0,0.0,0.0] for t in vocab_tag.values()}   # tp fp fn
     tp = tn = fp = fn = 0.0
     for idx, (sentence, gold) in enumerate(data):
         try:
@@ -240,19 +242,26 @@ def evaluate(data):
             continue
         for i in range(len(tags)):
             if gold[i] == tags[i]:
+                stats[gold[i]][0] = stats[gold[i]][0] + 1
                 if gold[i] == 0:
                     tn = tn + 1
                 else:
                     tp = tp + 1
             else:
+                stats[tags[i]][1] = stats[tags[i]][1] + 1
+                stats[gold[i]][2] = stats[gold[i]][2] + 1
                 if gold[i] == 0:
                     fp = fp + 1
                 else:
                     fn = fn + 1
+    print stats
     precision = tp / (tp + fp)
     recall = tp / (tp + fn)
     f1 = 2 * precision * recall / (precision + recall)
-    return (precision, recall, f1)
+    precision_results = {t:stats[t][0] / (stats[t][0] + stats[t][1]) for t in vocab_tag.values()}
+    recall_results = {t:stats[t][0] / (stats[t][0] + stats[t][2]) for t in vocab_tag.values()}
+    f1_results = {t:2*precision_results[t]*recall_results[t] / (precision_results[t]+recall_results[t]) for t in vocab_tag.values()}
+    return (precision, recall, f1, precision_results, recall_results, f1_results)
 
     
 def main():
@@ -270,7 +279,7 @@ def main():
 #            sentence,tags = train[idx]
 #            fails = fails + train_one(sentence,tags)
         for idx in tqdm(range(int(math.ceil(len(train)/batch_size)))):
-#        for idx in tqdm(range(1000)):
+#        for idx in tqdm(range(100)):
             dy.renew_cg()
             start = int(idx*batch_size)
             end = int(idx*batch_size + min(batch_size, len(train)-idx*batch_size))
@@ -280,8 +289,10 @@ def main():
         print_status()
         random.shuffle(dev)
         dy.renew_cg()
-        (p,r,f1) = evaluate(dev[:])
+        (p,r,f1, pr,rr,f1r) = evaluate(dev[:])
         print 'current iteration {:02d} precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(iter+1, p,r,f1)
+        for t in vocab_tag:
+            print '{:s}'.format(t).rjust(20) + ' precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(pr[vocab_tag[t]],rr[vocab_tag[t]],f1r[vocab_tag[t]])
         if prev_loss == cum_loss:
             stable_count = stable_count + 1
         else:
@@ -295,8 +306,10 @@ def main():
             print 'Converged! Start evalutation on test sets'
             break
 
-    (p,r,f1) = evaluate(test)
+    (p,r,f1, pr, rr, f1r) = evaluate(test)
     print 'Test {:2d} precision {:2.2f} recall {:2.2f} F1 {:2.2f}'.format(iter, p,r,f1)
+    for t in vocab_tag:
+        print '{:s}'.format(t).rjust(8) + ' precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(pr[vocab_tag[t]],rr[vocab_tag[t]],f1r[vocab_tag[t]])
 
 
 
