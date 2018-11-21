@@ -278,8 +278,8 @@ def main():
 #        for idx in tqdm(range(len(train))):
 #            sentence,tags = train[idx]
 #            fails = fails + train_one(sentence,tags)
-        for idx in tqdm(range(int(math.ceil(len(train)/batch_size)))):
-#        for idx in tqdm(range(100)):
+#        for idx in tqdm(range(int(math.ceil(len(train)/batch_size)))):
+        for idx in tqdm(range(100)):
             dy.renew_cg()
             start = int(idx*batch_size)
             end = int(idx*batch_size + min(batch_size, len(train)-idx*batch_size))
@@ -293,7 +293,7 @@ def main():
         print 'current iteration {:02d} precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(iter+1, p,r,f1)
         for t in vocab_tag:
             print '{:s}'.format(t).rjust(20) + ' precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(pr[vocab_tag[t]],rr[vocab_tag[t]],f1r[vocab_tag[t]])
-        if prev_loss == cum_loss:
+        if prev_f1 == f1:
             stable_count = stable_count + 1
         else:
             print 'previous cumulated loss: {:02f} current cummulated loss: {:02f}'.format(prev_loss, cum_loss)
