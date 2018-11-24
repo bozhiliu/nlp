@@ -240,16 +240,20 @@ def evaluate(data, full=False):
     recall_list = [[] for i in range(VOCAB_TAG_SIZE)]
     precision_list = [[] for i in range(VOCAB_TAG_SIZE)]
     f1_list = [[] for i in range(VOCAB_TAG_SIZE)]
+    gold_all = []
+    tag_all = []
     if full:
         test_end = len(data)
     else:
         test_end = 1000
-    for idx, (sentence, gold) in enumerate(data[:test_end]):
+    for idx, (sentence, gold) in enumerate(tqdm(data[:test_end])):
         try:
             dy.renew_cg()
             MLPS, tags = sentence_feed(sentence)
         except:
             continue
+        tag_all = tag_all + tags
+        gold_all = gold_all + gold
         tag_order = np.sort(np.unique(tags+gold))
         curr_recall = metrics.recall_score(gold, tags, average=None, labels=tag_order)
         curr_precision = metrics.precision_score(gold,tags, average=None, labels=tag_order)
@@ -262,6 +266,11 @@ def evaluate(data, full=False):
             
     for k,i in vocab_tag.iteritems():
         print '{:s}'.format(k).rjust(16) + ' recall {:02.2f}/{:02.2f} precision {:02.2f}/{:02.2f} F1 {:02.2f}/{:02.2f}'.format(np.mean(recall_list[i]), np.var(recall_list[i]),np.mean(precision_list[i]), np.var(precision_list[i]),np.mean(f1_list[i]), np.var(f1_list[i]))
+    general_recall = metrics.recall_score(gold_all, tag_all, average='macro')
+    general_precision = metrics.precision_score(gold_all, tag_all, average='macro')
+    general_f1 = metrics.f1_score(gold_all, tag_all, average='macro')
+    print 'overall'.rjust(16) + ' recall {:02.2f}      precision {:02.2f}      F1 {:02.2f}'.format(general_recall, general_precision, general_f1)
+    return general_recall, general_precision, general_f1
 
     
 def main():
@@ -289,10 +298,10 @@ def main():
         print_status()
         random.shuffle(dev)
         dy.renew_cg()
-        print 'iteration {:02d} Evaluating'.format(iter)
+        print 'iteration {:02d} Evaluating'.format(iter+1)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            (p,r,f1) = evaluate(dev[:])
+            r,p,f1 = evaluate(dev[:])
         if prev_f1 == f1:
             stable_count = stable_count + 1
         else:
@@ -307,8 +316,8 @@ def main():
             break
 
     print 'Test'
-    (p,r,f1) = evaluate(test, full=True)
-
+    r,p,f1 = evaluate(test, full=True)
+    
 
 
 if __name__ == '__main__':
