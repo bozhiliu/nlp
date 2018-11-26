@@ -75,7 +75,8 @@ class Config():
     filename_dev = os.path.join(cwd, "data/dev.txt")
     filename_test = os.path.join(cwd, "data/gold.txt")
     filename_train = os.path.join(cwd, "data/train.txt")
-
+    filename_crowd = os.path.join(cwd, "data/crowd.txt")
+    
     #filename_dev = filename_test = filename_train = "data/test.txt" # test
 
     max_iter = None # if not None, max number of examples in Dataset

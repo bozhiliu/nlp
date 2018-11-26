@@ -109,7 +109,7 @@ def pre_main():
 
     for pio in PIO:
       print('Reading files for %s' %pio)
-      for fdir in ['train', 'test/gold']:
+      for fdir in ['train', 'test/gold', 'test/crowd']:
         batch = fdir.split('/')[-1]
         ann_fnames = glob('../../ebm_nlp_1_00/annotations/aggregated/starting_spans/%s/%s/*.ann' %(pio, fdir))
         for fname in ann_fnames:

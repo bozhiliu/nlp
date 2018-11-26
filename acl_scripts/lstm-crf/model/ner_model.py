@@ -124,6 +124,8 @@ class NERModel(BaseModel):
                         name="_char_embeddings",
                         dtype=tf.float32,
                         shape=[self.config.nchars, self.config.dim_char])
+                self._char_embeddings = _char_embeddings
+                
                 char_embeddings = tf.nn.embedding_lookup(_char_embeddings,
                         self.char_ids, name="char_embeddings")
 
@@ -202,7 +204,7 @@ class NERModel(BaseModel):
             log_likelihood, trans_params = tf.contrib.crf.crf_log_likelihood(
                     self.logits, self.labels, self.sequence_lengths)
             self.trans_params = trans_params # need to evaluate it for decoding
-            self.loss = tf.reduce_mean(-log_likelihood)
+            self.loss = tf.reduce_mean(-log_likelihood)               
         else:
             losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
                     logits=self.logits, labels=self.labels)
@@ -213,7 +215,84 @@ class NERModel(BaseModel):
         # for tensorboard
         tf.summary.scalar("loss", self.loss)
 
+        
+    def add_word_embeddings_gradient_op(self):
+        char_embedding_gradient = tf.gradients(self.loss, self._char_embeddings)[0]
+        gradient_addition = tf.clip_by_norm(char_embedding_gradient, clip_norm = 1, axis=1)*0.01
+        self._new_char_embedding = gradient_addition + self._char_embeddings
+        with tf.variable_score('words'):
+            _word_embeddings = tf.get_variable(self.config.embeddings,
+                            name = '_word_embeddings',
+                            dtype=tf.float32,
+                            trainable=self.config.train_embeddings)
+            word_embeddings = tf.nn.embedding_lookup(_word_embeddings,
+                            self.word_ids, name="word_embeddings")
+        with tf.variable_scope('chars'):
+            char_embeddings = tf.nn.embedding_lookup(_new_char_embeddings,
+                            self.char_ids, name="char_embeddings")
 
+            # put the time dimension on axis=1
+            s = tf.shape(char_embeddings)
+            char_embeddings = tf.reshape(char_embeddings,
+                            shape=[s[0]*s[1], s[-2], self.config.dim_char])
+            word_lengths = tf.reshape(self.word_lengths, shape=[s[0]*s[1]])
+
+            # bi lstm on chars
+            cell_fw = tf.contrib.rnn.LSTMCell(self.config.hidden_size_char,
+                            state_is_tuple=True)
+            cell_bw = tf.contrib.rnn.LSTMCell(self.config.hidden_size_char,
+                            state_is_tuple=True)
+            _output = tf.nn.bidirectional_dynamic_rnn(cell_fw,
+                            cell_bw, char_embeddings,
+                            sequence_length=word_lengths, dtype=tf.float32)
+
+            # read and concat output
+            _, ((_, output_fw), (_, output_bw)) = _output
+            output = tf.concat([output_fw, output_bw], axis=-1)
+
+            # shape = (batch size, max sentence length, char hidden size)
+            output = tf.reshape(output,
+                            shape=[s[0], s[1], 2*self.config.hidden_size_char])
+            word_embeddings = tf.concat([word_embeddings, output], axis=-1)
+
+        self.new_word_embeddings = tf.nn.dropout(word_embeddings, self.dropout)
+
+
+    def add_logits_gradient_op(self):
+        with tf.variable_scope("bi-lstm"):
+            cell_fw = tf.contrib.rnn.LSTMCell(self.config.hidden_size_lstm)
+            cell_bw = tf.contrib.rnn.LSTMCell(self.config.hidden_size_lstm)
+            (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+                    cell_fw, cell_bw, self.new_word_embeddings,
+                    sequence_length=self.sequence_lengths, dtype=tf.float32)
+            output = tf.concat([output_fw, output_bw], axis=-1)
+            output = tf.nn.dropout(output, self.dropout)
+
+        with tf.variable_scope("proj"):
+            W = tf.get_variable("W", dtype=tf.float32,
+                    shape=[2*self.config.hidden_size_lstm, self.config.ntags])
+
+            b = tf.get_variable("b", shape=[self.config.ntags],
+                    dtype=tf.float32, initializer=tf.zeros_initializer())
+
+            nsteps = tf.shape(output)[1]
+            output = tf.reshape(output, [-1, 2*self.config.hidden_size_lstm])
+            pred = tf.matmul(output, W) + b
+            self.new_logits = tf.reshape(pred, [-1, nsteps, self.config.ntags])
+                    
+
+    def add_loss_gradient_op(self):
+        if self.config.use_crf:
+            log_likelihood, trans_params = tf.contrib.crf.crf_log_likelihood(
+                    self.new_logits, self.labels, self.sequence_lengths, self.trans_params)
+            assert trans_params == self.trans_params
+            self.new_loss = tf.reduce_mean(-log_likelihood)
+            self.train_loss = self.new_loss + self.loss
+        # for tensorboard
+        tf.summary.scalar("loss", self.new_loss)
+
+
+        
     def build(self):
         # NER specific functions
         self.add_placeholders()
@@ -222,8 +301,12 @@ class NERModel(BaseModel):
         self.add_pred_op()
         self.add_loss_op()
 
+        self.add_word_embeddings_gradient_op()
+        self.add_logits_gradient_op()
+        self.add_loss_gradient_op()
+        
         # Generic functions that add training op and initialize session
-        self.add_train_op(self.config.lr_method, self.lr, self.loss,
+        self.add_train_op(self.config.lr_method, self.lr, self.train_loss,
                 self.config.clip)
         self.initialize_session() # now self.sess is defined and vars are init
 
@@ -284,7 +367,7 @@ class NERModel(BaseModel):
                     self.config.dropout)
 
             _, train_loss, summary = self.sess.run(
-                    [self.train_op, self.loss, self.merged], feed_dict=fd)
+                    [self.train_op, self.train_loss, self.merged], feed_dict=fd)
 
             prog.update(i + 1, [("train loss", train_loss)])
 
@@ -300,7 +383,7 @@ class NERModel(BaseModel):
         return metrics["f1"]
 
 
-    def run_evaluate(self, test):
+    def run_evaluate(self, __test, run_size = 100):
         """Evaluates performance on test set
 
         Args:
@@ -310,54 +393,63 @@ class NERModel(BaseModel):
             metrics: (dict) metrics["acc"] = 98.4, ...
 
         """
+                
         tags = self.idx_to_tag.values()
-        stats = { tag: { 'n_correct': 0., 'n_pred': 0., 'n_true': 0. } for tag in tags }
 
         def div_or_zero(num, den):
           return num/den if den else 0.0
 
         accs = []
         correct_preds, total_correct, total_preds = 0., 0., 0.
-        for words, labels in minibatches(test, self.config.batch_size):
-            labels_pred, sequence_lengths = self.predict_batch(words)
 
-            for lab, lab_pred, length in zip(labels, labels_pred,
+        results = [{ metric: {} for metric in ['f1', 'p', 'r'] } for _ in range(run_size)]
+
+        _test = [i for i in __test]
+        for runs in range(run_size):
+            test = [_test[i] for i in np.random.choice(len(_test), len(_test)/run_size)]
+            stats = { tag: { 'n_correct': 0., 'n_pred': 0., 'n_true': 0. } for tag in tags }
+
+            for words, labels in minibatches(test, self.config.batch_size):
+                labels_pred, sequence_lengths = self.predict_batch(words)
+
+                for lab, lab_pred, length in zip(labels, labels_pred,
                                              sequence_lengths):
-                lab      = lab[:length]
-                lab_pred = lab_pred[:length]
-                accs    += [a==b for (a, b) in zip(lab, lab_pred)]
+                    lab      = lab[:length]
+                    lab_pred = lab_pred[:length]
+                    accs    += [a==b for (a, b) in zip(lab, lab_pred)]
 
-                for l_true, l_pred in zip(lab, lab_pred):
-                  if l_true == l_pred:
-                    stats[self.idx_to_tag[l_true]]['n_correct'] += 1
-                  stats[self.idx_to_tag[l_true]]['n_true'] += 1
-                  stats[self.idx_to_tag[l_pred]]['n_pred'] += 1
+                    for l_true, l_pred in zip(lab, lab_pred):
+                        if l_true == l_pred:
+                            stats[self.idx_to_tag[l_true]]['n_correct'] += 1
+                        stats[self.idx_to_tag[l_true]]['n_true'] += 1
+                        stats[self.idx_to_tag[l_pred]]['n_pred'] += 1
 
 
-                lab_chunks      = set(get_chunks(lab, self.config.vocab_tags))
-                lab_pred_chunks = set(get_chunks(lab_pred, self.config.vocab_tags))
+                    lab_chunks      = set(get_chunks(lab, self.config.vocab_tags))
+                    lab_pred_chunks = set(get_chunks(lab_pred, self.config.vocab_tags))
 
-                #correct_preds += len(lab_chunks & lab_pred_chunks)
-                #total_preds   += len(lab_pred_chunks)
-                #total_correct += len(lab_chunks)
+                    #correct_preds += len(lab_chunks & lab_pred_chunks)
+                    #total_preds   += len(lab_pred_chunks)
+                    #total_correct += len(lab_chunks)
 
-        # Span stats
-        p   = correct_preds / total_preds if correct_preds > 0 else 0
-        r   = correct_preds / total_correct if correct_preds > 0 else 0
-        f1  = 2 * p * r / (p + r) if correct_preds > 0 else 0
-        acc = np.mean(accs)
+            # Span stats
+            p   = correct_preds / total_preds if correct_preds > 0 else 0
+            r   = correct_preds / total_correct if correct_preds > 0 else 0
+            f1  = 2 * p * r / (p + r) if correct_preds > 0 else 0
+            acc = np.mean(accs)
 
-        # Token stats
-        results = { metric: {} for metric in ['f1', 'p', 'r'] }
-        for tag, counts in stats.items():
-          tag_p = div_or_zero(counts['n_correct'], counts['n_pred'])
-          tag_r = div_or_zero(counts['n_correct'], counts['n_true'])
-          results['p'][tag] = tag_p
-          results['r'][tag] = tag_r
-          results['f1'][tag] = div_or_zero(2.0 * tag_p * tag_r, (tag_p + tag_r))
-          print '%s: %s' %(tag, '  '.join(['%s=%.3f' %(metric, results[metric][tag]) for metric in results]))
+            # Token stats
+            for tag, counts in stats.items():
+                tag_p = div_or_zero(counts['n_correct'], counts['n_pred'])
+                tag_r = div_or_zero(counts['n_correct'], counts['n_true'])
+                results[runs]['p'][tag] = tag_p
+                results[runs]['r'][tag] = tag_r
+                results[runs]['f1'][tag] = div_or_zero(2.0 * tag_p * tag_r, (tag_p + tag_r))
 
-        macro_results = { metric: np.mean(results[metric].values()) for metric in results }
+        for tag in tags:
+            print '%s: %s' %(tag, '  '.join(['%s=%02.3f/%02.3f' %(metric, np.mean([results[j][metric][tag] for j in range(run_size)]), np.var([results[j][metric][tag] for j in range(run_size)])) for metric in ['p', 'r', 'f1']]))
+  
+        macro_results = { metric: np.mean([results[j][metric].values() for j in range(run_size)]) for metric in ['p', 'r', 'f1'] }
 
         return macro_results
 

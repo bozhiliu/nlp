@@ -19,7 +19,8 @@ def main():
                          config.processing_tag, config.max_iter)
     train = CoNLLDataset(config.filename_train, config.processing_word,
                          config.processing_tag, config.max_iter)
-
+    crowd = CoNLLDataset(config.filename_crowd, config_processing_word,
+                         config.processing_tag, config.max_iter)
     # train model
     print('training')
     model.train(train, dev)
