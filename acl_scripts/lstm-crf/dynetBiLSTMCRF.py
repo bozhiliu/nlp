@@ -11,13 +11,15 @@ import dynet as dy
 import numpy as np
 import math
 import argparse
+import sklearn.metrics as metrics
+import warnings
 from model.data_utils import CoNLLDataset, load_vocab, get_processing_word, get_trimmed_glove_vectors
 from model.config import Config
 
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--batch', dest='batch_size',type=float, action='store', default=2.0, help='set batch size')
+parser.add_argument('--batch', dest='batch_size',type=float, action='store', default=10.0, help='set batch size')
 parser.add_argument('--load', dest='load', action='store_true', help='whether if load previous network')
 options = parser.parse_args()
 
@@ -231,37 +233,44 @@ def print_status():
     print 'averaged training loss {:02.2f}'.format((cum_loss / num_tagged)*100)
 
 
-def evaluate(data):
+def evaluate(data, full=False):
     stats = {t:[0.0,0.0,0.0] for t in vocab_tag.values()}   # tp fp fn
     tp = tn = fp = fn = 0.0
-    for idx, (sentence, gold) in enumerate(data):
+    random.shuffle(data)
+    recall_list = [[] for i in range(VOCAB_TAG_SIZE)]
+    precision_list = [[] for i in range(VOCAB_TAG_SIZE)]
+    f1_list = [[] for i in range(VOCAB_TAG_SIZE)]
+    gold_all = []
+    tag_all = []
+    if full:
+        test_end = len(data)
+    else:
+        test_end = 1000
+    for idx, (sentence, gold) in enumerate(tqdm(data[:test_end])):
         try:
             dy.renew_cg()
             MLPS, tags = sentence_feed(sentence)
         except:
             continue
-        for i in range(len(tags)):
-            if gold[i] == tags[i]:
-                stats[gold[i]][0] = stats[gold[i]][0] + 1
-                if gold[i] == 0:
-                    tn = tn + 1
-                else:
-                    tp = tp + 1
-            else:
-                stats[tags[i]][1] = stats[tags[i]][1] + 1
-                stats[gold[i]][2] = stats[gold[i]][2] + 1
-                if gold[i] == 0:
-                    fp = fp + 1
-                else:
-                    fn = fn + 1
-    print stats
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
-    f1 = 2 * precision * recall / (precision + recall)
-    precision_results = {t:stats[t][0] / (stats[t][0] + stats[t][1]) for t in vocab_tag.values()}
-    recall_results = {t:stats[t][0] / (stats[t][0] + stats[t][2]) for t in vocab_tag.values()}
-    f1_results = {t:2*precision_results[t]*recall_results[t] / (precision_results[t]+recall_results[t]) for t in vocab_tag.values()}
-    return (precision, recall, f1, precision_results, recall_results, f1_results)
+        tag_all = tag_all + tags
+        gold_all = gold_all + gold
+        tag_order = np.sort(np.unique(tags+gold))
+        curr_recall = metrics.recall_score(gold, tags, average=None, labels=tag_order)
+        curr_precision = metrics.precision_score(gold,tags, average=None, labels=tag_order)
+        curr_f1 = metrics.f1_score(gold, tags, average=None, labels=tag_order)
+        for i in tag_order:
+            recall_list[i].append(curr_recall[np.where(tag_order==i)])
+            precision_list[i].append(curr_precision[np.where(tag_order==i)])
+            f1_list[i].append(curr_f1[np.where(tag_order==i)])
+
+            
+    for k,i in vocab_tag.iteritems():
+        print '{:s}'.format(k).rjust(16) + ' recall {:02.2f}/{:02.2f} precision {:02.2f}/{:02.2f} F1 {:02.2f}/{:02.2f}'.format(np.mean(recall_list[i]), np.var(recall_list[i]),np.mean(precision_list[i]), np.var(precision_list[i]),np.mean(f1_list[i]), np.var(f1_list[i]))
+    general_recall = metrics.recall_score(gold_all, tag_all, average='macro')
+    general_precision = metrics.precision_score(gold_all, tag_all, average='macro')
+    general_f1 = metrics.f1_score(gold_all, tag_all, average='macro')
+    print 'overall'.rjust(16) + ' recall {:02.2f}      precision {:02.2f}      F1 {:02.2f}'.format(general_recall, general_precision, general_f1)
+    return general_recall, general_precision, general_f1
 
     
 def main():
@@ -289,10 +298,10 @@ def main():
         print_status()
         random.shuffle(dev)
         dy.renew_cg()
-        (p,r,f1, pr,rr,f1r) = evaluate(dev[:])
-        print 'current iteration {:02d} precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(iter+1, p,r,f1)
-        for t in vocab_tag:
-            print '{:s}'.format(t).rjust(20) + ' precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(pr[vocab_tag[t]],rr[vocab_tag[t]],f1r[vocab_tag[t]])
+        print 'iteration {:02d} Evaluating'.format(iter+1)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            r,p,f1 = evaluate(dev[:])
         if prev_f1 == f1:
             stable_count = stable_count + 1
         else:
@@ -306,11 +315,9 @@ def main():
             print 'Converged! Start evalutation on test sets'
             break
 
-    (p,r,f1, pr, rr, f1r) = evaluate(test)
-    print 'Test {:2d} precision {:2.2f} recall {:2.2f} F1 {:2.2f}'.format(iter, p,r,f1)
-    for t in vocab_tag:
-        print '{:s}'.format(t).rjust(8) + ' precision {:02.2f} recall {:02.2f} F1 {:02.2f}'.format(pr[vocab_tag[t]],rr[vocab_tag[t]],f1r[vocab_tag[t]])
-
+    print 'Test'
+    r,p,f1 = evaluate(test, full=True)
+    
 
 
 if __name__ == '__main__':
