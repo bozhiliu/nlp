@@ -8,6 +8,7 @@ from model.config import Config
 
 
 config = Config()
+config.set_path('default')
 
 
 #################################################################################
