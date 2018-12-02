@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import os
+import sys
+
 
 from model.data_utils import minibatches, pad_sequences, CoNLLDataset
 from model.general_utils import Progbar
@@ -176,7 +178,7 @@ def run_evaluate(_test, run_size = run_size_default):
         else:
             replace_value = True
             
-            curr_dev = [dev[i] for i in np.random.choice(len(dev), len(dev)/run_size, replace=replace_value)]
+        curr_dev = [dev[i] for i in np.random.choice(len(dev), len(dev)/run_size, replace=replace_value)]
         stats = {tag:{'n_correct':0., 'n_pred':0., 'n_true':0.} for tag in tags}
         for i, (dev_words, dev_labels) in enumerate(minibatches(curr_dev, batch_size)):
 
@@ -215,44 +217,54 @@ def run_evaluate(_test, run_size = run_size_default):
 
 
 
+def train_epoch():
+    for epoch in range(config.nepochs):
 
-for epoch in range(config.nepochs):
+        #################################################################################
 
-    #################################################################################
+        print ('Epoch {:02d} out of {:02d}'.format(epoch+1, config.nepochs))
 
-    print ('Epoch {:02d} out of {:02d}'.format(epoch+1, config.nepochs))
+        prog = Progbar(target=nbatches)
 
-    prog = Progbar(target=nbatches)
-
-    np.random.shuffle(train)
+        np.random.shuffle(train)
     
-    for i, (epoch_words, epoch_labels) in enumerate(minibatches(train[:], batch_size)):
+        for i, (epoch_words, epoch_labels) in enumerate(minibatches(train[:], batch_size)):
 
-        feed, _ = get_feed_dict(epoch_words, epoch_labels, config.lr, config.dropout)
+            feed, _ = get_feed_dict(epoch_words, epoch_labels, config.lr, config.dropout)
         
-        _,train_loss = sess.run([train_op, complete_loss], feed_dict = feed)
-        prog.update(i+1, [("train loss", train_loss)])
+            _,train_loss = sess.run([train_op, complete_loss], feed_dict = feed)
+            prog.update(i+1, [("train loss", train_loss)])
 
 
-    #################################################################################
-    average_results = run_evaluate(dev, run_size=100)
-    config.lr *= config.lr_decay
-    if average_results['f1'] >= best_score:
-        no_improvement = 0
-        best_score = average_results['f1']
-        if not os.path.exists(config.dir_model):
-            os.makedirs(config.dir_model)
-        saver.save(sess, config.dir_model)
-        print ('New best score {:.02f}!'.format(average_results['f1']))
-    else:
-        no_improvement += 1
-        if no_improvement >= config.nepoch_no_imprv:
-            print ('Early stop at #{:02d} epoch without improvement'.format(epoch))
-            break
+        #################################################################################
+        average_results = run_evaluate(dev, run_size=100)
+        config.lr *= config.lr_decay
+        if average_results['f1'] >= best_score:
+            no_improvement = 0
+            best_score = average_results['f1']
+            if not os.path.exists(config.dir_model):
+                os.makedirs(config.dir_model)
+            saver.save(sess, config.dir_model)
+            print ('New best score {:.02f}!'.format(average_results['f1']))
+        else:
+            no_improvement += 1
+            if no_improvement >= config.nepoch_no_imprv:
+                print ('Early stop at #{:02d} epoch without improvement'.format(epoch))
+                break
     
-    
 
-#################################################################################
-print ('Test')
-saver.restore(sess, config.dir_model)
-run_evaluate(test, run_size=1)    
+def test_epoch():
+    print ('Test')
+    saver.restore(sess, config.dir_model)
+    run_evaluate(test, run_size=1)    
+
+
+
+if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        train_epoch()
+        test_epoch()
+    else if sys.argv[1] == 'test':
+        test_epoch()
+    else if sys.argv[1] == 'train':
+        train_epoch()
