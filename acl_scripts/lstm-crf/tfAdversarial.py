@@ -34,7 +34,7 @@ lr = tf.placeholder(tf.float32, shape=[], name="lr")
 #################################################################################
 with tf.variable_scope('word'):
     _word_embeddings = tf.Variable(config.embeddings, name="raw_word_embeddings",dtype=tf.float32, trainable=config.train_embeddings)
-        
+    
     word_embeddings = tf.nn.embedding_lookup(_word_embeddings, word_ids, name="word_embedings")
 
     
@@ -79,13 +79,46 @@ with tf.variable_scope('proj'):
 log_likelihood, trans_params = tf.contrib.crf.crf_log_likelihood(logits, labels, sequence_lengths)
 loss = tf.reduce_mean(-log_likelihood)
 
+
 #################################################################################
 
 if config.lr_method.lower() == 'adam':
     optimizer = tf.train.AdamOptimizer(lr)
 
-gradients,var = zip(*optimizer.compute_gradients(loss))
-train_op = optimizer.apply_gradients(zip(gradients, var))
+char_gradient = tf.gradients(loss, _char_embeddings)[0]
+char_gradient = tf.stop_gradient(char_gradient)
+char_gradient = 0.01 * char_gradient * tf.math.sqrt(float(config.dim_char))
+_new_char_embeddings = _char_embeddings
+
+gradient_update_op = optimizer.apply_gradients([(char_gradient, _new_char_embeddings)])
+new_char_embeddings = tf.nn.embedding_lookup(_new_char_embeddings, char_ids, name='new_char_embeddings')
+
+
+new_s = tf.shape(new_char_embeddings)
+new_char_embeddings = tf.reshape(new_char_embeddings, shape=[new_s[0]*new_s[1], new_s[-2], config.dim_char])
+new_word_lengths_flat = tf.reshape(word_lengths, shape=[new_s[0]*new_s[1]])
+_, ((_, new_char_output_fwd), (_, new_char_output_bwd)) = tf.nn.bidirectional_dynamic_rnn(char_cell_fwd, char_cell_bwd, new_char_embeddings, sequence_length = new_word_lengths_flat, dtype=tf.float32)
+new_char_output = tf.concat([new_char_output_fwd, new_char_output_bwd], axis=-1)
+new_char_output = tf.reshape(new_char_output, shape=[new_s[0], new_s[1], 2*config.hidden_size_char])
+
+new_word_embeddings = tf.nn.embedding_lookup(_word_embeddings, word_ids, name="word_embeddings")
+new_word_embeddings = tf.concat([new_word_embeddings, new_char_output], axis=-1)
+new_word_embeddings = tf.nn.dropout(new_word_embeddings, dropout)
+
+(new_word_output_fwd, new_word_output_bwd), _ = tf.nn.bidirectional_dynamic_rnn(word_cell_fwd, word_cell_bwd, new_word_embeddings, sequence_length = sequence_lengths, dtype=tf.float32)
+new_word_output = tf.concat([new_word_output_fwd, new_word_output_bwd], axis=-1)
+
+new_nsteps = tf.shape(new_word_output)[1]
+new_word_output = tf.reshape(new_word_output, shape=[-1, 2*config.hidden_size_lstm])
+new_pred = tf.matmul(new_word_output, W)+b
+new_logits = tf.reshape(new_pred, shape=[-1, new_nsteps, config.ntags])
+
+new_log_likelihood , new_trans_params = tf.contrib.crf.crf_log_likelihood(new_logits, labels, sequence_lengths,trans_params)
+assert new_trans_params == trans_params
+new_loss = tf.reduce_mean(-new_log_likelihood)
+
+complete_loss = new_loss + loss
+train_op = optimizer.minimize(complete_loss)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -102,7 +135,6 @@ train = CoNLLDataset(config.filename_train, config.processing_word,
 train = [i for i in train]
 test = CoNLLDataset(config.filename_test, config.processing_word,
                     config.processing_tag, config.max_iter)
-test = [i for i in test]
 
 
 idx_to_tag = {idx:tag for tag, idx in config.vocab_tags.items()}
@@ -151,7 +183,7 @@ def run_evaluate(_test, run_size = run_size_default):
         else:
             replace_value = True
             
-        curr_dev = [dev[i] for i in np.random.choice(len(dev), len(dev)/run_size, replace=replace_value)]
+            curr_dev = [dev[i] for i in np.random.choice(len(dev), len(dev)/run_size, replace=replace_value)]
         stats = {tag:{'n_correct':0., 'n_pred':0., 'n_true':0.} for tag in tags}
         for i, (dev_words, dev_labels) in enumerate(minibatches(curr_dev, batch_size)):
 
@@ -205,7 +237,7 @@ for epoch in range(config.nepochs):
 
         feed, _ = get_feed_dict(epoch_words, epoch_labels, config.lr, config.dropout)
         
-        _, train_loss = sess.run([train_op, loss], feed_dict = feed)
+        _,train_loss = sess.run([train_op, loss], feed_dict = feed)
         prog.update(i+1, [("train loss", train_loss)])
 
 
@@ -222,12 +254,12 @@ for epoch in range(config.nepochs):
     else:
         no_improvement += 1
         if no_improvement >= config.nepoch_no_imprv:
-            print 'Early stop at #{:02d} epoch without improvement'.format(epoch+1)
+            print 'Early stop at #{:02d} epoch without improvement'.format(epoch)
             break
     
     
 
 #################################################################################
-print 'Test. Restoring session...'
+print 'Test'
 saver.restore(sess, config.dir_model)
 run_evaluate(test, run_size=1)    
