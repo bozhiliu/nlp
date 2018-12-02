@@ -141,7 +141,7 @@ train = CoNLLDataset(config.filename_train, config.processing_word,
 train = [i for i in train]
 test = CoNLLDataset(config.filename_test, config.processing_word,
                     config.processing_tag, config.max_iter)
-
+test = [i for i in test]
 
 idx_to_tag = {idx:tag for tag, idx in config.vocab_tags.items()}
 tags = idx_to_tag.values()
