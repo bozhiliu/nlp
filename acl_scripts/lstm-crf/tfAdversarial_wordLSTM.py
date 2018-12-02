@@ -262,5 +262,5 @@ if __name__ == '__main__':
         test_epoch()
     elif sys.argv[1] == 'test':
         test_epoch()
-    else sys.argv[1] == 'train':
+    elif sys.argv[1] == 'train':
         train_epoch()
