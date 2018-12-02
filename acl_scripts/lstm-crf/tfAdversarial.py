@@ -270,7 +270,7 @@ def train_epoch():
 def test_epoch():
     print ('Test')
     saver.restore(sess, config.dir_model)
-    run_evaluate(test, run_size=1)    
+    run_evaluate(test, run_size=50)    
 
 
 
