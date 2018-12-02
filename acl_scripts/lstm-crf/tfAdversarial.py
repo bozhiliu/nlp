@@ -276,7 +276,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         train_epoch()
         test_epoch()
-    else if sys.argv[1] == 'test':
+    elif sys.argv[1] == 'test':
         test_epoch()
-    else if sys.argv[1] == 'train':
+    else sys.argv[1] == 'train':
         train_epoch()
