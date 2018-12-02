@@ -207,10 +207,10 @@ def run_evaluate(_test, run_size = run_size_default):
             results[runs]['f1'][curr_tag] = div_or_zero(2.0*tag_p*tag_r, tag_p+tag_r)
     print('')
     for t in tags:
-        print '               %s: %s' %(t, '  '.join(['%s=%02.3f/%02.3f' %(metric, np.mean([results[j][metric][t] for j in range(run_size)]), np.var([results[j][metric][t] for j in range(run_size)])) for metric in ['p', 'r', 'f1']]))
+        print ('               %s: %s' %(t, '  '.join(['%s=%02.3f/%02.3f' %(metric, np.mean([results[j][metric][t] for j in range(run_size)]), np.var([results[j][metric][t] for j in range(run_size)])) for metric in ['p', 'r', 'f1']])))
 
     average_results = { metric: np.mean([results[j][metric].values() for j in range(run_size)]) for metric in ['p', 'r', 'f1'] }
-    print '          average p {:02.3f} r {:02.3f} f1 {:02.3f}'.format(average_results['p'], average_results['r'], average_results['f1'])
+    print ('          average p {:02.3f} r {:02.3f} f1 {:02.3f}'.format(average_results['p'], average_results['r'], average_results['f1']))
     return average_results
 
 
@@ -220,7 +220,7 @@ for epoch in range(config.nepochs):
 
     #################################################################################
 
-    print 'Epoch {:02d} out of {:02d}'.format(epoch+1, config.nepochs)
+    print ('Epoch {:02d} out of {:02d}'.format(epoch+1, config.nepochs))
 
     prog = Progbar(target=nbatches)
 
@@ -243,16 +243,16 @@ for epoch in range(config.nepochs):
         if not os.path.exists(config.dir_model):
             os.makedirs(config.dir_model)
         saver.save(sess, config.dir_model)
-        print 'New best score {:.02f}!'.format(average_results['f1'])
+        print ('New best score {:.02f}!'.format(average_results['f1']))
     else:
         no_improvement += 1
         if no_improvement >= config.nepoch_no_imprv:
-            print 'Early stop at #{:02d} epoch without improvement'.format(epoch)
+            print ('Early stop at #{:02d} epoch without improvement'.format(epoch))
             break
     
     
 
 #################################################################################
-print 'Test'
+print ('Test')
 saver.restore(sess, config.dir_model)
 run_evaluate(test, run_size=1)    
