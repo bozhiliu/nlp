@@ -94,12 +94,10 @@ word_gradient = 0.01 * tf.math.l2_normalize(word_gradient, axis=0) * tf.math.sqr
 _new_word_output = word_output
 
 #gradient_update_op = optimizer.apply_gradients([(word_gradient, _new_word_output)])
-_new_word_output = _new_word_output + word_gradient
+new_word_output = _new_word_output + word_gradient
 
-new_nsteps = tf.shape(_new_word_output)[1]
-new_word_output = tf.reshape(_new_word_output, shape=[-1, 2*config.hidden_size_lstm])
 new_pred = tf.matmul(new_word_output, W)+b
-new_logits = tf.reshape(new_pred, shape=[-1, new_nsteps, config.ntags])
+new_logits = tf.reshape(new_pred, shape=[-1, nsteps, config.ntags])
 
 new_log_likelihood , new_trans_params = tf.contrib.crf.crf_log_likelihood(new_logits, labels, sequence_lengths,trans_params)
 assert new_trans_params == trans_params
@@ -131,8 +129,6 @@ tags = idx_to_tag.values()
 run_size_default = 100
 batch_size = config.batch_size
 nbatches = (len(train) + batch_size -1) // batch_size
-best_score = 0
-no_improvement = 0
 
 
 def div_or_zero(num, den):
@@ -212,6 +208,9 @@ def run_evaluate(_test, run_size = run_size_default):
 
 
 def train_epoch():
+    best_score = 0
+    no_improvement = 0
+    
     for epoch in range(config.nepochs):
 
         #################################################################################
