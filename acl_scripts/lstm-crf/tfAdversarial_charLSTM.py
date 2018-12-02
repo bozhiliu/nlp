@@ -10,7 +10,7 @@ from model.config import Config
 
 
 config = Config()
-config.dir_prefix = 'char_lstm_adv'
+config.set_path('char_lstm_adv')
 
 
 #################################################################################
@@ -130,6 +130,7 @@ train = CoNLLDataset(config.filename_train, config.processing_word,
 train = [i for i in train]
 test = CoNLLDataset(config.filename_test, config.processing_word,
                     config.processing_tag, config.max_iter)
+test = [i for i in test]
 
 
 idx_to_tag = {idx:tag for tag, idx in config.vocab_tags.items()}
@@ -266,5 +267,5 @@ if __name__ == '__main__':
         test_epoch()
     elif sys.argv[1] == 'test':
         test_epoch()
-    else sys.argv[1] == 'train':
+    elif sys.argv[1] == 'train':
         train_epoch()

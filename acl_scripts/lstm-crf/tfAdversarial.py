@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import os
+import sys
+
 
 from model.data_utils import minibatches, pad_sequences, CoNLLDataset
 from model.general_utils import Progbar
@@ -8,7 +10,7 @@ from model.config import Config
 
 
 config = Config()
-config.dir_prefix = 'char_embed_adv'
+config.set_path('char_embed_adv')
 
 
 #################################################################################
