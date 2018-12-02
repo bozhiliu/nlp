@@ -91,7 +91,8 @@ word_gradient = tf.stop_gradient(word_gradient)
 word_gradient = 0.01 * tf.math.l2_normalize(word_gradient, axis=0) * tf.math.sqrt(float(2*config.hidden_size_lstm))
 _new_word_output = word_output
 
-gradient_update_op = optimizer.apply_gradients([(word_gradient, _new_word_output)])
+#gradient_update_op = optimizer.apply_gradients([(word_gradient, _new_word_output)])
+_new_word_output = _new_word_output + word_gradient
 
 new_nsteps = tf.shape(_new_word_output)[1]
 new_word_output = tf.reshape(_new_word_output, shape=[-1, 2*config.hidden_size_lstm])
@@ -222,7 +223,7 @@ for epoch in range(config.nepochs):
 
         feed, _ = get_feed_dict(epoch_words, epoch_labels, config.lr, config.dropout)
         
-        _,_,train_loss = sess.run([gradient_update_op,train_op, loss], feed_dict = feed)
+        _,train_loss = sess.run([train_op, complete_loss], feed_dict = feed)
         prog.update(i+1, [("train loss", train_loss)])
 
 

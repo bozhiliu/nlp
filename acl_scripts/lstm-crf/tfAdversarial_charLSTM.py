@@ -230,7 +230,7 @@ for epoch in range(config.nepochs):
 
         feed, _ = get_feed_dict(epoch_words, epoch_labels, config.lr, config.dropout)
         
-        _,train_loss = sess.run([train_op, loss], feed_dict = feed)
+        _,train_loss = sess.run([train_op, complete_loss], feed_dict = feed)
         prog.update(i+1, [("train loss", train_loss)])
 
 
