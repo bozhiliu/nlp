@@ -88,11 +88,12 @@ if config.lr_method.lower() == 'adam':
 
 char_gradient = tf.gradients(loss, _char_embeddings)[0]
 char_gradient = tf.stop_gradient(char_gradient)
-print tf.shape(char_gradient)
+#print tf.shape(char_gradient)
 char_gradient = 0.01 * tf.math.l2_normalize(char_gradient, axis=1) * tf.math.sqrt(float(config.dim_char))
 _new_char_embeddings = _char_embeddings
 
-gradient_update_op = optimizer.apply_gradients([(char_gradient, _new_char_embeddings)])
+#gradient_update_op = optimizer.apply_gradients([(char_gradient, _new_char_embeddings)])
+_new_char_embeddings = _new_char_embeddings + char_gradient
 new_char_embeddings = tf.nn.embedding_lookup(_new_char_embeddings, char_ids, name='new_char_embeddings')
 
 

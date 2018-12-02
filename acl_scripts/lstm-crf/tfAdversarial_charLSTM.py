@@ -91,7 +91,8 @@ char_gradient = tf.stop_gradient(char_gradient)
 char_gradient = 0.01 * tf.math.l2_normalize(char_gradient, axis=2) * tf.math.sqrt(float(2*config.hidden_size_char))
 _new_char_output = char_output
 
-gradient_update_op = optimizer.apply_gradients([(char_gradient, _new_char_output)])
+#gradient_update_op = optimizer.apply_gradients([(char_gradient, _new_char_output)])
+_new_char_output = _new_char_output + char_gradient
 
 new_word_embeddings = tf.nn.embedding_lookup(_word_embeddings, word_ids, name="word_embeddings")
 new_word_embeddings = tf.concat([new_word_embeddings, _new_char_output], axis=-1)
@@ -229,7 +230,7 @@ for epoch in range(config.nepochs):
 
         feed, _ = get_feed_dict(epoch_words, epoch_labels, config.lr, config.dropout)
         
-        _,_,train_loss = sess.run([gradient_update_op,train_op, loss], feed_dict = feed)
+        _,train_loss = sess.run([train_op, loss], feed_dict = feed)
         prog.update(i+1, [("train loss", train_loss)])
 
 
