@@ -8,7 +8,7 @@ from model.config import Config
 
 
 config = Config()
-config.dir_prefix = 'char_lstm_adv'
+config.dir_prefix = 'word_lstm_adv'
 
 
 #################################################################################
