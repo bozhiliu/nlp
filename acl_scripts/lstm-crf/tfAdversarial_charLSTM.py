@@ -8,7 +8,7 @@ from model.config import Config
 
 
 config = Config()
-config.dir_prefix = 'char_embed_adv'
+config.dir_prefix = 'char_lstm_adv'
 
 
 #################################################################################
@@ -86,25 +86,15 @@ loss = tf.reduce_mean(-log_likelihood)
 if config.lr_method.lower() == 'adam':
     optimizer = tf.train.AdamOptimizer(lr)
 
-char_gradient = tf.gradients(loss, _char_embeddings)[0]
+char_gradient = tf.gradients(loss, char_output)[0]
 char_gradient = tf.stop_gradient(char_gradient)
-print tf.shape(char_gradient)
-char_gradient = 0.01 * tf.math.l2_normalize(char_gradient, axis=1) * tf.math.sqrt(float(config.dim_char))
-_new_char_embeddings = _char_embeddings
+char_gradient = 0.01 * tf.math.l2_normalize(char_gradient, axis=2) * tf.math.sqrt(float(2*config.hidden_size_char))
+_new_char_output = char_output
 
-gradient_update_op = optimizer.apply_gradients([(char_gradient, _new_char_embeddings)])
-new_char_embeddings = tf.nn.embedding_lookup(_new_char_embeddings, char_ids, name='new_char_embeddings')
-
-
-new_s = tf.shape(new_char_embeddings)
-new_char_embeddings = tf.reshape(new_char_embeddings, shape=[new_s[0]*new_s[1], new_s[-2], config.dim_char])
-new_word_lengths_flat = tf.reshape(word_lengths, shape=[new_s[0]*new_s[1]])
-_, ((_, new_char_output_fwd), (_, new_char_output_bwd)) = tf.nn.bidirectional_dynamic_rnn(char_cell_fwd, char_cell_bwd, new_char_embeddings, sequence_length = new_word_lengths_flat, dtype=tf.float32)
-new_char_output = tf.concat([new_char_output_fwd, new_char_output_bwd], axis=-1)
-new_char_output = tf.reshape(new_char_output, shape=[new_s[0], new_s[1], 2*config.hidden_size_char])
+gradient_update_op = optimizer.apply_gradients([(char_gradient, _new_char_output)])
 
 new_word_embeddings = tf.nn.embedding_lookup(_word_embeddings, word_ids, name="word_embeddings")
-new_word_embeddings = tf.concat([new_word_embeddings, new_char_output], axis=-1)
+new_word_embeddings = tf.concat([new_word_embeddings, _new_char_output], axis=-1)
 new_word_embeddings = tf.nn.dropout(new_word_embeddings, dropout)
 
 (new_word_output_fwd, new_word_output_bwd), _ = tf.nn.bidirectional_dynamic_rnn(word_cell_fwd, word_cell_bwd, new_word_embeddings, sequence_length = sequence_lengths, dtype=tf.float32)
@@ -121,7 +111,6 @@ new_loss = tf.reduce_mean(-new_log_likelihood)
 
 complete_loss = new_loss + loss
 train_op = optimizer.minimize(complete_loss)
-
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -240,7 +229,7 @@ for epoch in range(config.nepochs):
 
         feed, _ = get_feed_dict(epoch_words, epoch_labels, config.lr, config.dropout)
         
-        _,_,train_loss = sess.run([gradient_update_op, train_op, loss], feed_dict = feed)
+        _,_,train_loss = sess.run([gradient_update_op,train_op, loss], feed_dict = feed)
         prog.update(i+1, [("train loss", train_loss)])
 
 

@@ -54,7 +54,8 @@ class Config():
     cwd = os.getcwd()
 
     # general config
-    dir_output = os.path.join(cwd, "results/test/")
+    dir_prefix = ''
+    dir_output = os.path.join(cwd, "results/test_"+dir_prefix+'/')
     dir_model  = os.path.join(dir_output, "model.weights/")
     path_log   = os.path.join(dir_output, "log.txt")
 
