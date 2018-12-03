@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/vito/nlp/acl_scripts/lstm-crf/results/test_/model.weights/"
+all_model_checkpoint_paths: "/home/vito/nlp/acl_scripts/lstm-crf/results/test_/model.weights/"
