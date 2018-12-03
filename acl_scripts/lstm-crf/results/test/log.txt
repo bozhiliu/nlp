@@ -1,0 +1,3 @@
+2018-11-27 02:48:04,427:INFO: Initializing tf session
+2018-11-27 02:48:06,093:INFO: Epoch 1 out of 15
+2018-11-29 17:35:33,420:INFO: Restoring parameters from /Users/embedded/EBM-NLP/acl_scripts/lstm-crf/results/test/model.weights/

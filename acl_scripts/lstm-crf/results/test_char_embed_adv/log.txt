@@ -1,0 +1,1 @@
+2018-12-02 08:30:13,365:INFO: Restoring parameters from /Users/embedded/EBM-NLP/acl_scripts/lstm-crf/results/test_/model.weights/

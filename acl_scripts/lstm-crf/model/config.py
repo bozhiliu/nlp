@@ -23,7 +23,7 @@ class Config():
         if load:
             self.load()
 
-
+        
     def load(self):
         """Loads vocabulary, processing functions and embeddings
 
@@ -49,12 +49,13 @@ class Config():
 
         # 3. get pre-trained embeddings
         self.embeddings = (get_trimmed_glove_vectors(self.filename_trimmed)
-                if self.use_pretrained else None)
-
+                if self.use_pretrained else None)        
+        
     cwd = os.getcwd()
 
     # general config
-    dir_output = os.path.join(cwd, "results/test/")
+    dir_prefix = ''
+    dir_output = os.path.join(cwd, "results/test_"+dir_prefix+'/')
     dir_model  = os.path.join(dir_output, "model.weights/")
     path_log   = os.path.join(dir_output, "log.txt")
 
@@ -73,7 +74,7 @@ class Config():
 
     # dataset
     filename_dev = os.path.join(cwd, "data/dev.txt")
-    filename_test = os.path.join(cwd, "data/test.txt")
+    filename_test = os.path.join(cwd, "data/gold.txt")
     filename_train = os.path.join(cwd, "data/train.txt")
 
     #filename_dev = filename_test = filename_train = "data/test.txt" # test
@@ -103,3 +104,13 @@ class Config():
     # NOTE: if both chars and crf, only 1.6x slower on GPU
     use_crf = True # if crf, training is 1.7x slower on CPU
     use_chars = True # if char embedding, training is 3.5x slower on CPU
+
+
+    def set_path(self, prefix):
+        cwd = os.getcwd()
+
+        # general config
+        Config.dir_prefix = prefix
+        Config.dir_output = os.path.join(cwd, "results/test_"+Config.dir_prefix+'/')
+        Config.dir_model  = os.path.join(Config.dir_output, "model.weights/")
+        Config.path_log   = os.path.join(Config.dir_output, "log.txt")
