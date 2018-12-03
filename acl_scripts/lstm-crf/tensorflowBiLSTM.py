@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import os
+import sys
 
 from model.data_utils import minibatches, pad_sequences, CoNLLDataset
 from model.general_utils import Progbar
@@ -191,44 +192,56 @@ def run_evaluate(_test, run_size = run_size_default):
 
 
 
+def train_epoch():
+    for epoch in range(config.nepochs):
 
-for epoch in range(config.nepochs):
+        #################################################################################
 
-    #################################################################################
-
-    print ('Epoch {:02d} out of {:02d}'.format(epoch+1, config.nepochs))
-
-    prog = Progbar(target=nbatches)
-
-    np.random.shuffle(train)
-    
-    for i, (epoch_words, epoch_labels) in enumerate(minibatches(train[:], batch_size)):
-
-        feed, _ = get_feed_dict(epoch_words, epoch_labels, config.lr, config.dropout)
+        print ('Epoch {:02d} out of {:02d}'.format(epoch+1, config.nepochs))
         
-        _, train_loss = sess.run([train_op, loss], feed_dict = feed)
-        prog.update(i+1, [("train loss", train_loss)])
+        prog = Progbar(target=nbatches)
+    
+        np.random.shuffle(train)
+    
+        for i, (epoch_words, epoch_labels) in enumerate(minibatches(train[:], batch_size)):
+
+            feed, _ = get_feed_dict(epoch_words, epoch_labels, config.lr, config.dropout)
+        
+            _, train_loss = sess.run([train_op, loss], feed_dict = feed)
+            prog.update(i+1, [("train loss", train_loss)])
 
 
-    #################################################################################
-    average_results = run_evaluate(dev, run_size=100)
-    config.lr *= config.lr_decay
-    if average_results['f1'] >= best_score:
-        no_improvement = 0
-        best_score = average_results['f1']
-        if not os.path.exists(config.dir_model):
-            os.makedirs(config.dir_model)
-        saver.save(sess, config.dir_model)
-        print ('New best score {:.02f}!'.format(average_results['f1']))
-    else:
-        no_improvement += 1
-        if no_improvement >= config.nepoch_no_imprv:
-            print ('Early stop at #{:02d} epoch without improvement'.format(epoch+1))
-            break
+        #################################################################################
+        average_results = run_evaluate(dev, run_size=100)
+        config.lr *= config.lr_decay
+        if average_results['f1'] >= best_score:
+            no_improvement = 0
+            best_score = average_results['f1']
+            if not os.path.exists(config.dir_model):
+                os.makedirs(config.dir_model)
+            saver.save(sess, config.dir_model)
+            print ('New best score {:.02f}!'.format(average_results['f1']))
+        else:
+            no_improvement += 1
+            if no_improvement >= config.nepoch_no_imprv:
+                print ('Early stop at #{:02d} epoch without improvement'.format(epoch+1))
+                break
     
     
 
 #################################################################################
-print ('Test. Restoring session...')
-saver.restore(sess, config.dir_model)
-run_evaluate(test, run_size=50)    
+
+def test_epoch():
+    print ('Test. Restoring session...')
+    saver.restore(sess, config.dir_model)
+    run_evaluate(test, run_size=50)    
+
+
+if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        train_epoch()
+        test_epoch()
+    elif sys.argv[1] == 'test':
+        test_epoch()
+    elif sys.argv[1] == 'train':
+        train_epoch()
