@@ -138,8 +138,6 @@ tags = idx_to_tag.values()
 run_size_default = 100
 batch_size = config.batch_size
 nbatches = (len(train) + batch_size -1) // batch_size
-best_score = 0
-no_improvement = 0
 
 
 def div_or_zero(num, den):
@@ -219,6 +217,9 @@ def run_evaluate(_test, run_size = run_size_default):
 
 
 def train_epoch():
+    best_score = 0
+    no_improvement = 0
+    
     for epoch in range(config.nepochs):
 
         #################################################################################
